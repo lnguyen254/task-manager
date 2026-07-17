@@ -149,6 +149,26 @@ describe('TasksService', () => {
         NotFoundException,
       );
     });
+
+    it('scopes the query to whichever user is asking, never leaking across users', async () => {
+      prisma.task.findFirst.mockResolvedValueOnce({
+        id: 't1',
+        userId: 'user-1',
+        tags: [],
+      });
+      await service.findOne('user-1', 't1');
+      expect(prisma.task.findFirst).toHaveBeenLastCalledWith({
+        where: { id: 't1', userId: 'user-1' },
+        include: { tags: { include: { tag: true } } },
+      });
+
+      prisma.task.findFirst.mockResolvedValueOnce(null);
+      await expect(service.findOne('user-2', 't1')).rejects.toThrow(NotFoundException);
+      expect(prisma.task.findFirst).toHaveBeenLastCalledWith({
+        where: { id: 't1', userId: 'user-2' },
+        include: { tags: { include: { tag: true } } },
+      });
+    });
   });
 
   describe('remove', () => {
