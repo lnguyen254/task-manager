@@ -54,10 +54,20 @@ export class AuthService {
   }
 
   async refresh(dto: RefreshDto) {
+    const user = await this.verifyRefreshToken(dto.refreshToken);
+    return this.issueTokens(user.id, user.email);
+  }
+
+  async logout(dto: RefreshDto) {
+    const user = await this.verifyRefreshToken(dto.refreshToken);
+    await this.usersService.setRefreshTokenHash(user.id, null);
+  }
+
+  private async verifyRefreshToken(refreshToken: string) {
     let payload: { sub: string };
     try {
       payload = await this.jwtService.verifyAsync<{ sub: string }>(
-        dto.refreshToken,
+        refreshToken,
         {
           secret: process.env.JWT_REFRESH_SECRET,
         },
@@ -71,11 +81,11 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    if (user.refreshTokenHash !== hashToken(dto.refreshToken)) {
+    if (user.refreshTokenHash !== hashToken(refreshToken)) {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    return this.issueTokens(user.id, user.email);
+    return user;
   }
 
   private async issueTokens(userId: string, email: string) {

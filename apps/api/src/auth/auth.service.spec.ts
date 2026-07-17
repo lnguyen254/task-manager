@@ -336,4 +336,72 @@ describe('AuthService', () => {
       );
     });
   });
+
+  describe('logout', () => {
+    it('throws UnauthorizedException when the refresh token is malformed', async () => {
+      await expect(
+        service.logout({ refreshToken: 'not-a-jwt' }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it("throws UnauthorizedException when no user matches the token's subject", async () => {
+      const jwtService = new JwtService();
+      const refreshToken = await jwtService.signAsync(
+        { sub: 'ghost-user' },
+        { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '7d' },
+      );
+      usersService.findById.mockResolvedValue(null);
+
+      await expect(service.logout({ refreshToken })).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('throws UnauthorizedException when the presented token does not match the stored hash', async () => {
+      const jwtService = new JwtService();
+      const refreshToken = await jwtService.signAsync(
+        { sub: 'user-1' },
+        { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '7d' },
+      );
+      usersService.findById.mockResolvedValue({
+        id: 'user-1',
+        email: 'a@example.com',
+        name: 'Ada',
+        passwordHash: 'hash',
+        refreshTokenHash: createHash('sha256')
+          .update('a-different-token')
+          .digest('hex'),
+        createdAt: new Date('2026-01-01'),
+      });
+
+      await expect(service.logout({ refreshToken })).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('clears the stored refresh token hash when the presented token matches', async () => {
+      const jwtService = new JwtService();
+      const refreshToken = await jwtService.signAsync(
+        { sub: 'user-1' },
+        { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '7d' },
+      );
+      usersService.findById.mockResolvedValue({
+        id: 'user-1',
+        email: 'a@example.com',
+        name: 'Ada',
+        passwordHash: 'hash',
+        refreshTokenHash: createHash('sha256')
+          .update(refreshToken)
+          .digest('hex'),
+        createdAt: new Date('2026-01-01'),
+      });
+
+      await service.logout({ refreshToken });
+
+      expect(usersService.setRefreshTokenHash).toHaveBeenCalledWith(
+        'user-1',
+        null,
+      );
+    });
+  });
 });
