@@ -28,13 +28,20 @@ describe('UsersService', () => {
 
   describe('findByEmail', () => {
     it('returns the user matching the given email', async () => {
-      const user = { id: '1', email: 'a@example.com', passwordHash: 'hash', name: 'A' };
+      const user = {
+        id: '1',
+        email: 'a@example.com',
+        passwordHash: 'hash',
+        name: 'A',
+      };
       prisma.user.findUnique.mockResolvedValue(user);
 
       const result = await service.findByEmail('a@example.com');
 
       expect(result).toEqual(user);
-      expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { email: 'a@example.com' } });
+      expect(prisma.user.findUnique).toHaveBeenCalledWith({
+        where: { email: 'a@example.com' },
+      });
     });
 
     it('returns null when no user matches the email', async () => {
@@ -48,13 +55,20 @@ describe('UsersService', () => {
 
   describe('findById', () => {
     it('returns the user matching the given id', async () => {
-      const user = { id: '1', email: 'a@example.com', passwordHash: 'hash', name: 'A' };
+      const user = {
+        id: '1',
+        email: 'a@example.com',
+        passwordHash: 'hash',
+        name: 'A',
+      };
       prisma.user.findUnique.mockResolvedValue(user);
 
       const result = await service.findById('1');
 
       expect(result).toEqual(user);
-      expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { id: '1' } });
+      expect(prisma.user.findUnique).toHaveBeenCalledWith({
+        where: { id: '1' },
+      });
     });
 
     it('returns null when no user matches the id', async () => {
