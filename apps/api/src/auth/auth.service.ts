@@ -4,11 +4,12 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import * as argon2 from 'argon2';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { RefreshDto } from './dto/refresh.dto';
 
 @Injectable()
 export class AuthService {
@@ -52,6 +53,31 @@ export class AuthService {
     return this.issueTokens(user.id, user.email);
   }
 
+  async refresh(dto: RefreshDto) {
+    let payload: { sub: string };
+    try {
+      payload = await this.jwtService.verifyAsync<{ sub: string }>(
+        dto.refreshToken,
+        {
+          secret: process.env.JWT_REFRESH_SECRET,
+        },
+      );
+    } catch {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const user = await this.usersService.findById(payload.sub);
+    if (!user?.refreshTokenHash) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    if (user.refreshTokenHash !== hashToken(dto.refreshToken)) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    return this.issueTokens(user.id, user.email);
+  }
+
   private async issueTokens(userId: string, email: string) {
     const accessToken = await this.jwtService.signAsync(
       { sub: userId, email },
@@ -62,7 +88,7 @@ export class AuthService {
       },
     );
     const refreshToken = await this.jwtService.signAsync(
-      { sub: userId },
+      { sub: userId, jti: randomUUID() },
       {
         secret: process.env.JWT_REFRESH_SECRET,
         expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN ??

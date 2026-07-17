@@ -11,6 +11,7 @@ type User = {
   email: string;
   name: string;
   passwordHash: string;
+  refreshTokenHash?: string | null;
   createdAt: Date;
 };
 
@@ -18,6 +19,7 @@ describe('AuthService', () => {
   let service: AuthService;
   let usersService: {
     findByEmail: jest.Mock<Promise<User | null>, [string]>;
+    findById: jest.Mock<Promise<User | null>, [string]>;
     create: jest.Mock<Promise<User>, [CreateUserInput]>;
     setRefreshTokenHash: jest.Mock<Promise<void>, [string, string | null]>;
   };
@@ -32,6 +34,7 @@ describe('AuthService', () => {
   beforeEach(async () => {
     usersService = {
       findByEmail: jest.fn<Promise<User | null>, [string]>(),
+      findById: jest.fn<Promise<User | null>, [string]>(),
       create: jest.fn<Promise<User>, [CreateUserInput]>(),
       setRefreshTokenHash: jest.fn<Promise<void>, [string, string | null]>(),
     };
@@ -199,6 +202,135 @@ describe('AuthService', () => {
         usersService.setRefreshTokenHash.mock.calls[0];
       expect(userId).toBe('user-1');
       expect(storedHash).not.toBe(result.refreshToken);
+      expect(storedHash).toBe(
+        createHash('sha256').update(result.refreshToken).digest('hex'),
+      );
+    });
+  });
+
+  describe('refresh', () => {
+    it('throws UnauthorizedException when the refresh token is malformed', async () => {
+      await expect(
+        service.refresh({ refreshToken: 'not-a-jwt' }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it("throws UnauthorizedException when no user matches the token's subject", async () => {
+      const jwtService = new JwtService();
+      const refreshToken = await jwtService.signAsync(
+        { sub: 'ghost-user' },
+        { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '7d' },
+      );
+      usersService.findById.mockResolvedValue(null);
+
+      await expect(service.refresh({ refreshToken })).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('throws UnauthorizedException when the presented token does not match the stored hash', async () => {
+      const jwtService = new JwtService();
+      const refreshToken = await jwtService.signAsync(
+        { sub: 'user-1' },
+        { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '7d' },
+      );
+      usersService.findById.mockResolvedValue({
+        id: 'user-1',
+        email: 'a@example.com',
+        name: 'Ada',
+        passwordHash: 'hash',
+        refreshTokenHash: createHash('sha256')
+          .update('a-different-token')
+          .digest('hex'),
+        createdAt: new Date('2026-01-01'),
+      });
+
+      await expect(service.refresh({ refreshToken })).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('throws UnauthorizedException when the user has no stored refresh token (already logged out)', async () => {
+      const jwtService = new JwtService();
+      const refreshToken = await jwtService.signAsync(
+        { sub: 'user-1' },
+        { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '7d' },
+      );
+      usersService.findById.mockResolvedValue({
+        id: 'user-1',
+        email: 'a@example.com',
+        name: 'Ada',
+        passwordHash: 'hash',
+        refreshTokenHash: null,
+        createdAt: new Date('2026-01-01'),
+      });
+
+      await expect(service.refresh({ refreshToken })).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('returns a new access and refresh token pair when the presented token matches the stored hash', async () => {
+      const jwtService = new JwtService();
+      const oldRefreshToken = await jwtService.signAsync(
+        { sub: 'user-1' },
+        { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '7d' },
+      );
+      usersService.findById.mockResolvedValue({
+        id: 'user-1',
+        email: 'a@example.com',
+        name: 'Ada',
+        passwordHash: 'hash',
+        refreshTokenHash: createHash('sha256')
+          .update(oldRefreshToken)
+          .digest('hex'),
+        createdAt: new Date('2026-01-01'),
+      });
+
+      const result = await service.refresh({ refreshToken: oldRefreshToken });
+
+      const accessPayload = await jwtService.verifyAsync<{ sub: string }>(
+        result.accessToken,
+        {
+          secret: process.env.JWT_ACCESS_SECRET,
+        },
+      );
+      expect(accessPayload.sub).toBe('user-1');
+      const refreshPayload = await jwtService.verifyAsync<{ sub: string }>(
+        result.refreshToken,
+        {
+          secret: process.env.JWT_REFRESH_SECRET,
+        },
+      );
+      expect(refreshPayload.sub).toBe('user-1');
+    });
+
+    it('rotates the stored hash so the old refresh token can no longer be used', async () => {
+      const jwtService = new JwtService();
+      const oldRefreshToken = await jwtService.signAsync(
+        { sub: 'user-1' },
+        { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '7d' },
+      );
+      usersService.findById.mockResolvedValue({
+        id: 'user-1',
+        email: 'a@example.com',
+        name: 'Ada',
+        passwordHash: 'hash',
+        refreshTokenHash: createHash('sha256')
+          .update(oldRefreshToken)
+          .digest('hex'),
+        createdAt: new Date('2026-01-01'),
+      });
+
+      const result = await service.refresh({ refreshToken: oldRefreshToken });
+
+      expect(usersService.setRefreshTokenHash).toHaveBeenCalledTimes(1);
+      const [userId, storedHash] =
+        usersService.setRefreshTokenHash.mock.calls[0];
+      expect(userId).toBe('user-1');
+      expect(storedHash).not.toBe(
+        createHash('sha256').update(oldRefreshToken).digest('hex'),
+      );
       expect(storedHash).toBe(
         createHash('sha256').update(result.refreshToken).digest('hex'),
       );
