@@ -1,4 +1,8 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '../generated/prisma/client';
 import { CreateTagDto } from './dto/create-tag.dto';
@@ -21,5 +25,25 @@ export class TagsService {
       }
       throw error;
     }
+  }
+
+  findAll(userId: string) {
+    return this.prisma.tag.findMany({
+      where: { userId },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  async remove(userId: string, id: string) {
+    const existing = await this.prisma.tag.findFirst({
+      where: { id, userId },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Tag not found');
+    }
+
+    await this.prisma.tag.delete({ where: { id } });
   }
 }

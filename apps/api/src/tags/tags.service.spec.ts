@@ -1,4 +1,4 @@
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { TagsService } from './tags.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -9,6 +9,9 @@ describe('TagsService', () => {
   let prisma: {
     tag: {
       create: jest.Mock;
+      findMany: jest.Mock;
+      findFirst: jest.Mock;
+      delete: jest.Mock;
     };
   };
 
@@ -16,6 +19,9 @@ describe('TagsService', () => {
     prisma = {
       tag: {
         create: jest.fn(),
+        findMany: jest.fn(),
+        findFirst: jest.fn(),
+        delete: jest.fn(),
       },
     };
 
@@ -58,6 +64,48 @@ describe('TagsService', () => {
       await expect(
         service.create('user-1', { name: 'Groceries' }),
       ).rejects.toThrow('connection lost');
+    });
+  });
+
+  describe('findAll', () => {
+    it('returns tags scoped to the requesting user, ordered by name', async () => {
+      const tags = [
+        { id: 'tag-1', name: 'Groceries', userId: 'user-1' },
+        { id: 'tag-2', name: 'Urgent', userId: 'user-1' },
+      ];
+      prisma.tag.findMany.mockResolvedValue(tags);
+
+      const result = await service.findAll('user-1');
+
+      expect(prisma.tag.findMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+        orderBy: { name: 'asc' },
+      });
+      expect(result).toEqual(tags);
+    });
+  });
+
+  describe('remove', () => {
+    it('deletes the tag after confirming it belongs to the user', async () => {
+      prisma.tag.findFirst.mockResolvedValue({ id: 'tag-1' });
+      prisma.tag.delete.mockResolvedValue({ id: 'tag-1' });
+
+      await service.remove('user-1', 'tag-1');
+
+      expect(prisma.tag.findFirst).toHaveBeenCalledWith({
+        where: { id: 'tag-1', userId: 'user-1' },
+        select: { id: true },
+      });
+      expect(prisma.tag.delete).toHaveBeenCalledWith({ where: { id: 'tag-1' } });
+    });
+
+    it('throws NotFoundException and does not delete when not found or not owned', async () => {
+      prisma.tag.findFirst.mockResolvedValue(null);
+
+      await expect(service.remove('user-1', 'someone-elses-tag')).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(prisma.tag.delete).not.toHaveBeenCalled();
     });
   });
 });
