@@ -1,11 +1,21 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import * as argon2 from 'argon2';
+import { createHash } from 'node:crypto';
+import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly jwtService: JwtService,
+  ) {}
 
   async register(dto: RegisterDto) {
     const existing = await this.usersService.findByEmail(dto.email);
@@ -27,4 +37,48 @@ export class AuthService {
       createdAt: user.createdAt,
     };
   }
+
+  async login(dto: LoginDto) {
+    const user = await this.usersService.findByEmail(dto.email);
+    if (!user) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    const passwordValid = await argon2.verify(user.passwordHash, dto.password);
+    if (!passwordValid) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    return this.issueTokens(user.id, user.email);
+  }
+
+  private async issueTokens(userId: string, email: string) {
+    const accessToken = await this.jwtService.signAsync(
+      { sub: userId, email },
+      {
+        secret: process.env.JWT_ACCESS_SECRET,
+        expiresIn: (process.env.JWT_ACCESS_EXPIRES_IN ??
+          '15m') as JwtSignOptions['expiresIn'],
+      },
+    );
+    const refreshToken = await this.jwtService.signAsync(
+      { sub: userId },
+      {
+        secret: process.env.JWT_REFRESH_SECRET,
+        expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN ??
+          '7d') as JwtSignOptions['expiresIn'],
+      },
+    );
+
+    await this.usersService.setRefreshTokenHash(
+      userId,
+      hashToken(refreshToken),
+    );
+
+    return { accessToken, refreshToken };
+  }
+}
+
+export function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
 }

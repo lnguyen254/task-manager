@@ -8,6 +8,7 @@ describe('UsersService', () => {
     user: {
       findUnique: jest.Mock;
       create: jest.Mock;
+      update: jest.Mock;
     };
   };
 
@@ -16,6 +17,7 @@ describe('UsersService', () => {
       user: {
         findUnique: jest.fn(),
         create: jest.fn(),
+        update: jest.fn(),
       },
     };
 
@@ -90,6 +92,30 @@ describe('UsersService', () => {
 
       expect(result).toEqual(created);
       expect(prisma.user.create).toHaveBeenCalledWith({ data: input });
+    });
+  });
+
+  describe('setRefreshTokenHash', () => {
+    it('updates the user with the given refresh token hash', async () => {
+      prisma.user.update.mockResolvedValue(undefined);
+
+      await service.setRefreshTokenHash('1', 'a-hash');
+
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: '1' },
+        data: { refreshTokenHash: 'a-hash' },
+      });
+    });
+
+    it('clears the refresh token hash when given null', async () => {
+      prisma.user.update.mockResolvedValue(undefined);
+
+      await service.setRefreshTokenHash('1', null);
+
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: '1' },
+        data: { refreshTokenHash: null },
+      });
     });
   });
 });

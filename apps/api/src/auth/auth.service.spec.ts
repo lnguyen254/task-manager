@@ -1,5 +1,7 @@
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import * as argon2 from 'argon2';
+import { createHash } from 'node:crypto';
+import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
 import { CreateUserInput, UsersService } from '../users/users.service';
@@ -17,17 +19,27 @@ describe('AuthService', () => {
   let usersService: {
     findByEmail: jest.Mock<Promise<User | null>, [string]>;
     create: jest.Mock<Promise<User>, [CreateUserInput]>;
+    setRefreshTokenHash: jest.Mock<Promise<void>, [string, string | null]>;
   };
+
+  beforeAll(() => {
+    process.env.JWT_ACCESS_SECRET = 'test-access-secret';
+    process.env.JWT_ACCESS_EXPIRES_IN = '15m';
+    process.env.JWT_REFRESH_SECRET = 'test-refresh-secret';
+    process.env.JWT_REFRESH_EXPIRES_IN = '7d';
+  });
 
   beforeEach(async () => {
     usersService = {
       findByEmail: jest.fn<Promise<User | null>, [string]>(),
       create: jest.fn<Promise<User>, [CreateUserInput]>(),
+      setRefreshTokenHash: jest.fn<Promise<void>, [string, string | null]>(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
+        JwtService,
         { provide: UsersService, useValue: usersService },
       ],
     }).compile();
@@ -104,6 +116,92 @@ describe('AuthService', () => {
         }),
       ).rejects.toThrow(ConflictException);
       expect(usersService.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('login', () => {
+    it('throws UnauthorizedException when no user exists with the given email', async () => {
+      usersService.findByEmail.mockResolvedValue(null);
+
+      await expect(
+        service.login({ email: 'missing@example.com', password: 'whatever' }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('throws UnauthorizedException when the password is incorrect', async () => {
+      usersService.findByEmail.mockResolvedValue({
+        id: 'user-1',
+        email: 'a@example.com',
+        name: 'Ada',
+        passwordHash: await argon2.hash('correct-password'),
+        createdAt: new Date('2026-01-01'),
+      });
+
+      await expect(
+        service.login({ email: 'a@example.com', password: 'wrong-password' }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('returns an access token and refresh token signed with their respective secrets', async () => {
+      const jwtService = new JwtService();
+      usersService.findByEmail.mockResolvedValue({
+        id: 'user-1',
+        email: 'a@example.com',
+        name: 'Ada',
+        passwordHash: await argon2.hash('correct-password'),
+        createdAt: new Date('2026-01-01'),
+      });
+
+      const result = await service.login({
+        email: 'a@example.com',
+        password: 'correct-password',
+      });
+
+      const accessPayload = await jwtService.verifyAsync<{ sub: string }>(
+        result.accessToken,
+        {
+          secret: process.env.JWT_ACCESS_SECRET,
+        },
+      );
+      expect(accessPayload.sub).toBe('user-1');
+
+      const refreshPayload = await jwtService.verifyAsync<{ sub: string }>(
+        result.refreshToken,
+        {
+          secret: process.env.JWT_REFRESH_SECRET,
+        },
+      );
+      expect(refreshPayload.sub).toBe('user-1');
+
+      await expect(
+        jwtService.verifyAsync(result.accessToken, {
+          secret: process.env.JWT_REFRESH_SECRET,
+        }),
+      ).rejects.toThrow();
+    });
+
+    it('persists a hash of the refresh token, not the raw token', async () => {
+      usersService.findByEmail.mockResolvedValue({
+        id: 'user-1',
+        email: 'a@example.com',
+        name: 'Ada',
+        passwordHash: await argon2.hash('correct-password'),
+        createdAt: new Date('2026-01-01'),
+      });
+
+      const result = await service.login({
+        email: 'a@example.com',
+        password: 'correct-password',
+      });
+
+      expect(usersService.setRefreshTokenHash).toHaveBeenCalledTimes(1);
+      const [userId, storedHash] =
+        usersService.setRefreshTokenHash.mock.calls[0];
+      expect(userId).toBe('user-1');
+      expect(storedHash).not.toBe(result.refreshToken);
+      expect(storedHash).toBe(
+        createHash('sha256').update(result.refreshToken).digest('hex'),
+      );
     });
   });
 });

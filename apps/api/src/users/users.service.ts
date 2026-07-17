@@ -22,4 +22,11 @@ export class UsersService {
   create(data: CreateUserInput) {
     return this.prisma.user.create({ data });
   }
+
+  async setRefreshTokenHash(userId: string, refreshTokenHash: string | null) {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { refreshTokenHash },
+    });
+  }
 }
