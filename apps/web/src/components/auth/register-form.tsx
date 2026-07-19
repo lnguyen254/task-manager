@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { useForm } from "react-hook-form";
+import { useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ type RegisterValues = z.infer<typeof registerSchema>;
 
 export function RegisterForm() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [formError, setFormError] = useState<string | null>(null);
   const {
     register,
@@ -62,6 +64,8 @@ export function RegisterForm() {
 
     // The register route handler logs the new user in and sets the session
     // cookies itself, so there's nothing left to do but land on the app.
+    // Still clear the query cache defensively — see login-form.tsx.
+    queryClient.clear();
     router.push("/dashboard");
     router.refresh();
   }

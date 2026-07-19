@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 /**
  * Server-side base URL for the NestJS API. The browser never talks to the
@@ -73,4 +73,105 @@ export function setAuthCookies(
 export function clearAuthCookies(response: NextResponse) {
   response.cookies.delete(ACCESS_TOKEN_COOKIE);
   response.cookies.delete(REFRESH_TOKEN_COOKIE);
+}
+
+interface ProxyOptions {
+  method: "GET" | "POST" | "PATCH" | "DELETE";
+  body?: unknown;
+}
+
+async function fetchApi(path: string, accessToken: string, options: ProxyOptions) {
+  return fetch(`${API_BASE_URL}${path}`, {
+    method: options.method,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      ...(options.body !== undefined ? { "Content-Type": "application/json" } : {}),
+    },
+    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    cache: "no-store",
+  });
+}
+
+async function toNextResponse(apiResponse: Response) {
+  if (apiResponse.status === 204) {
+    return new NextResponse(null, { status: 204 });
+  }
+  const data = await apiResponse.json().catch(() => null);
+  return NextResponse.json(data, { status: apiResponse.status });
+}
+
+/**
+ * Forwards a request to a JWT-protected NestJS endpoint, attaching the
+ * access token cookie as a Bearer header (the API never sees the cookie
+ * itself). On a 401 — missing or expired access token — attempts one
+ * silent refresh-and-retry before giving up, the same behavior `/api/auth/me`
+ * implements for its own single endpoint, shared here across every
+ * task/tag route so the flow isn't reimplemented per-route.
+ */
+export async function proxyAuthedRequest(
+  request: NextRequest,
+  path: string,
+  options: ProxyOptions,
+): Promise<NextResponse> {
+  const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE)?.value;
+
+  if (accessToken) {
+    let apiResponse: Response;
+    try {
+      apiResponse = await fetchApi(path, accessToken, options);
+    } catch (error) {
+      console.error(`API proxy: failed to reach API at ${path}`, error);
+      return NextResponse.json(
+        { message: "Unable to reach the server. Please try again." },
+        { status: 502 },
+      );
+    }
+    if (apiResponse.status !== 401) {
+      return toNextResponse(apiResponse);
+    }
+  }
+
+  // Access token missing or rejected — try refreshing before giving up.
+  const refreshToken = request.cookies.get(REFRESH_TOKEN_COOKIE)?.value;
+  if (!refreshToken) {
+    return NextResponse.json({ message: "Not authenticated" }, { status: 401 });
+  }
+
+  let refreshResponse: Response;
+  try {
+    refreshResponse = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken }),
+    });
+  } catch (error) {
+    console.error(`API proxy: refresh failed to reach API for ${path}`, error);
+    return NextResponse.json(
+      { message: "Unable to reach the server. Please try again." },
+      { status: 502 },
+    );
+  }
+
+  if (!refreshResponse.ok) {
+    const response = NextResponse.json({ message: "Not authenticated" }, { status: 401 });
+    clearAuthCookies(response);
+    return response;
+  }
+
+  const tokens: AuthTokens = await refreshResponse.json();
+
+  let apiResponse: Response;
+  try {
+    apiResponse = await fetchApi(path, tokens.accessToken, options);
+  } catch (error) {
+    console.error(`API proxy: retry failed to reach API at ${path}`, error);
+    return NextResponse.json(
+      { message: "Unable to reach the server. Please try again." },
+      { status: 502 },
+    );
+  }
+
+  const response = await toNextResponse(apiResponse);
+  setAuthCookies(response, tokens, request.nextUrl.protocol === "https:");
+  return response;
 }

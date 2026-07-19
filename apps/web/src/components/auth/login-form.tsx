@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { useForm } from "react-hook-form";
+import { useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ type LoginValues = z.infer<typeof loginSchema>;
 
 export function LoginForm() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [formError, setFormError] = useState<string | null>(null);
   const {
     register,
@@ -57,6 +59,10 @@ export function LoginForm() {
       return;
     }
 
+    // Defensive: if a previous session's queries are still cached in this
+    // tab (e.g. an expired session that was never explicitly logged out
+    // of), don't let them leak into the newly-logged-in user's view.
+    queryClient.clear();
     router.push("/dashboard");
     router.refresh();
   }
