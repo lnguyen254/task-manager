@@ -3,9 +3,17 @@
 import { useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { SlidersHorizontal } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { fetchTags, tagKeys } from "@/lib/tags";
 
 const SORT_OPTIONS = [
@@ -23,6 +31,7 @@ export function TaskFilterBar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { data: tags } = useQuery({ queryKey: tagKeys.list(), queryFn: fetchTags });
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const searchParam = searchParams.get("search") ?? "";
   const [searchInput, setSearchInput] = useState(searchParam);
@@ -67,17 +76,18 @@ export function TaskFilterBar() {
     searchParams.get("sortOrder") ?? "desc"
   }`;
 
-  return (
-    <div className="flex flex-wrap items-center gap-2">
+  const filterControls = (
+    <>
       <Input
         placeholder="Search by title..."
         value={searchInput}
         onChange={(event) => handleSearchChange(event.target.value)}
-        className="max-w-56 flex-1"
+        className="w-full lg:max-w-56 lg:flex-1"
       />
 
       <NativeSelect
         aria-label="Filter by status"
+        className="w-full lg:w-fit"
         value={searchParams.get("status") ?? ""}
         onChange={(event) =>
           updateParams({ status: event.target.value || undefined })
@@ -91,6 +101,7 @@ export function TaskFilterBar() {
 
       <NativeSelect
         aria-label="Filter by priority"
+        className="w-full lg:w-fit"
         value={searchParams.get("priority") ?? ""}
         onChange={(event) =>
           updateParams({ priority: event.target.value || undefined })
@@ -105,6 +116,7 @@ export function TaskFilterBar() {
       {tags && tags.length > 0 && (
         <NativeSelect
           aria-label="Filter by tag"
+          className="w-full lg:w-fit"
           value={searchParams.get("tagId") ?? ""}
           onChange={(event) =>
             updateParams({ tagId: event.target.value || undefined })
@@ -121,6 +133,7 @@ export function TaskFilterBar() {
 
       <NativeSelect
         aria-label="Sort tasks"
+        className="w-full lg:w-fit"
         value={sortValue}
         onChange={(event) => {
           const [sortBy, sortOrder] = event.target.value.split(":");
@@ -133,6 +146,32 @@ export function TaskFilterBar() {
           </NativeSelectOption>
         ))}
       </NativeSelect>
-    </div>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop: full inline row. Below `lg`, the row of five controls
+          doesn't fit without awkward wrapping, so it collapses into a
+          single "Filters" button + sheet instead (design-prompt.md's
+          responsive behavior section). */}
+      <div className="hidden items-center gap-2 lg:flex">{filterControls}</div>
+
+      <div className="flex lg:hidden">
+        <Button variant="outline" onClick={() => setFiltersOpen(true)}>
+          <SlidersHorizontal />
+          Filters
+        </Button>
+      </div>
+
+      <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+        <SheetContent className="flex flex-col gap-3 p-4">
+          <SheetHeader className="p-0">
+            <SheetTitle>Filters</SheetTitle>
+          </SheetHeader>
+          {filterControls}
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }

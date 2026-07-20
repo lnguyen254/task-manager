@@ -18,17 +18,18 @@ export function TaskRow({ task }: { task: Task }) {
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   return (
-    <li className="group flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
-      <PriorityIndicator priority={task.priority} />
-
-      <span
-        className={cn(
-          "min-w-0 flex-1 truncate text-sm font-medium",
-          task.status === "DONE" && "text-muted-foreground line-through",
-        )}
-      >
-        {task.title}
-      </span>
+    <li className="group flex flex-col gap-2 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4 sm:gap-y-2">
+      <div className="flex min-w-0 items-center gap-2">
+        <PriorityIndicator priority={task.priority} />
+        <span
+          className={cn(
+            "min-w-0 flex-1 truncate text-sm font-medium",
+            task.status === "DONE" && "text-muted-foreground line-through",
+          )}
+        >
+          {task.title}
+        </span>
+      </div>
 
       {task.tags.length > 0 && (
         <div className="flex flex-wrap items-center gap-1">
@@ -40,11 +41,14 @@ export function TaskRow({ task }: { task: Task }) {
         </div>
       )}
 
-      <DueDate dueDate={task.dueDate} />
+      <div className="flex items-center gap-2">
+        <DueDate dueDate={task.dueDate} />
+        <StatusBadge status={task.status} />
+      </div>
 
-      <StatusBadge status={task.status} />
-
-      <div className="flex items-center gap-1 opacity-0 focus-within:opacity-100 group-hover:opacity-100">
+      {/* Hover-reveal only makes sense with a pointer — always visible on
+          touch (below `sm`), since there's no hover state to reveal it. */}
+      <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover:opacity-100">
         <Button
           variant="ghost"
           size="icon-sm"

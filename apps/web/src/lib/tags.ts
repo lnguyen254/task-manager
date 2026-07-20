@@ -1,4 +1,4 @@
-import { extractErrorMessage } from "@/lib/utils";
+import { ApiError, extractErrorMessage } from "@/lib/utils";
 import type { Tag } from "@/lib/tasks";
 
 export const tagKeys = {
@@ -11,7 +11,7 @@ export async function fetchTags(): Promise<Tag[]> {
   const response = await fetch("/api/tags");
   if (!response.ok) {
     const error = await response.json().catch(() => null);
-    throw new Error(extractErrorMessage(error));
+    throw new ApiError(response.status, extractErrorMessage(error));
   }
   return response.json();
 }
@@ -24,7 +24,7 @@ export async function createTag(name: string): Promise<Tag> {
   });
   if (!response.ok) {
     const error = await response.json().catch(() => null);
-    throw new Error(extractErrorMessage(error));
+    throw new ApiError(response.status, extractErrorMessage(error));
   }
   return response.json();
 }
@@ -33,6 +33,6 @@ export async function deleteTag(id: string): Promise<void> {
   const response = await fetch(`/api/tags/${id}`, { method: "DELETE" });
   if (!response.ok) {
     const error = await response.json().catch(() => null);
-    throw new Error(extractErrorMessage(error));
+    throw new ApiError(response.status, extractErrorMessage(error));
   }
 }

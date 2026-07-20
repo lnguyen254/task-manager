@@ -1,4 +1,4 @@
-import { extractErrorMessage } from "@/lib/utils";
+import { ApiError, extractErrorMessage } from "@/lib/utils";
 
 export type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
 export type TaskPriority = "LOW" | "MEDIUM" | "HIGH";
@@ -59,7 +59,7 @@ export async function fetchTasks(filters: TaskFilters = {}): Promise<TaskListRes
   const response = await fetch(`/api/tasks${queryString ? `?${queryString}` : ""}`);
   if (!response.ok) {
     const error = await response.json().catch(() => null);
-    throw new Error(extractErrorMessage(error));
+    throw new ApiError(response.status, extractErrorMessage(error));
   }
   return response.json();
 }
@@ -81,7 +81,7 @@ export async function createTask(input: TaskInput): Promise<Task> {
   });
   if (!response.ok) {
     const error = await response.json().catch(() => null);
-    throw new Error(extractErrorMessage(error));
+    throw new ApiError(response.status, extractErrorMessage(error));
   }
   return response.json();
 }
@@ -94,7 +94,7 @@ export async function updateTask(id: string, input: TaskInput): Promise<Task> {
   });
   if (!response.ok) {
     const error = await response.json().catch(() => null);
-    throw new Error(extractErrorMessage(error));
+    throw new ApiError(response.status, extractErrorMessage(error));
   }
   return response.json();
 }
@@ -103,6 +103,6 @@ export async function deleteTask(id: string): Promise<void> {
   const response = await fetch(`/api/tasks/${id}`, { method: "DELETE" });
   if (!response.ok) {
     const error = await response.json().catch(() => null);
-    throw new Error(extractErrorMessage(error));
+    throw new ApiError(response.status, extractErrorMessage(error));
   }
 }

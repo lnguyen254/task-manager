@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -28,6 +29,7 @@ export function DeleteTaskDialog({ open, onOpenChange, task }: DeleteTaskDialogP
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
       onOpenChange(false);
+      toast.success(`"${task.title}" deleted`);
     },
   });
 
