@@ -68,6 +68,11 @@ app via `pnpm -r`. Backend tests: `pnpm --filter api test` (unit) and
 `pnpm --filter api test:e2e` (e2e — needs a reachable Postgres, e.g. the one from
 `docker compose up -d postgres` above).
 
+## Deployment
+
+For deploying this stack to a server (Docker Compose, domain + HTTPS via Nginx/Let's
+Encrypt), see [`docs/deploy.md`](docs/deploy.md).
+
 ## Architecture
 
 ### Monorepo layout
