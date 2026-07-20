@@ -5,6 +5,7 @@ import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { useController, useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, X } from "lucide-react";
+import { toast } from "sonner";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { createTag, deleteTag, fetchTags, tagKeys } from "@/lib/tags";
 import type { Tag } from "@/lib/tasks";
@@ -67,7 +69,10 @@ interface TaskFormDialogProps {
 export function TaskFormDialog({ open, onOpenChange, task }: TaskFormDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      {/* Full-screen below `sm` (design-prompt.md's responsive behavior
+          section calls for the create/edit form going full-screen on
+          mobile), a normal centered modal from `sm` up. */}
+      <DialogContent className="max-sm:inset-0 max-sm:top-0 max-sm:left-0 max-sm:h-dvh max-sm:max-h-dvh max-sm:w-screen max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:overflow-y-auto max-sm:rounded-none sm:max-w-md">
         {/*
           Keyed by open + task id so the form remounts (and re-reads
           defaultValues) fresh every time the dialog opens, instead of
@@ -98,7 +103,10 @@ function TaskForm({
   const [tagPendingDelete, setTagPendingDelete] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
-  const { data: tags } = useQuery({ queryKey: tagKeys.list(), queryFn: fetchTags });
+  const { data: tags, isPending: tagsPending } = useQuery({
+    queryKey: tagKeys.list(),
+    queryFn: fetchTags,
+  });
 
   const {
     register,
@@ -132,6 +140,7 @@ function TaskForm({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
       onOpenChange(false);
+      toast.success(isEdit ? "Task updated" : "Task created");
     },
   });
 
@@ -164,6 +173,7 @@ function TaskForm({
       tagIdsField.onChange([...tagIdsField.value, tag.id]);
       setNewTagName("");
       setTagError(null);
+      toast.success(`Tag "${tag.name}" created`);
     },
     onError: (error) => {
       setTagError(error instanceof Error ? error.message : "Failed to create tag.");
@@ -180,6 +190,7 @@ function TaskForm({
   const deleteTagMutation = useMutation({
     mutationFn: deleteTag,
     onSuccess: (_data, tagId) => {
+      const deletedTagName = tags?.find((t) => t.id === tagId)?.name;
       queryClient.setQueryData<Tag[]>(tagKeys.list(), (old) =>
         old?.filter((t) => t.id !== tagId),
       );
@@ -192,6 +203,7 @@ function TaskForm({
       // now that the tag (and its task associations) are gone server-side.
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
       setTagPendingDelete(null);
+      toast.success(deletedTagName ? `Tag "${deletedTagName}" deleted` : "Tag deleted");
     },
     onError: (error) => {
       setTagError(error instanceof Error ? error.message : "Failed to delete tag.");
@@ -259,6 +271,13 @@ function TaskForm({
 
         <div className="flex flex-col gap-1.5">
           <Label>Tags</Label>
+          {tagsPending && (
+            <div className="flex flex-wrap gap-1.5">
+              {Array.from({ length: 3 }, (_, i) => (
+                <Skeleton key={i} className="h-6 w-16 rounded-full" />
+              ))}
+            </div>
+          )}
           {tags && tags.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {tags.map((tag) => {
@@ -353,7 +372,7 @@ function TaskForm({
           {tagError && <p className="text-sm text-destructive">{tagError}</p>}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="max-sm:rounded-b-none">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>

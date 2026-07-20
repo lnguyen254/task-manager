@@ -109,6 +109,7 @@ describe('AuthService', () => {
         email: 'a@example.com',
         name: 'Existing',
         passwordHash: 'hash',
+        createdAt: new Date('2026-01-01'),
       });
 
       await expect(

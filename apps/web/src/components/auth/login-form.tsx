@@ -28,10 +28,16 @@ const loginSchema = z.object({
 
 type LoginValues = z.infer<typeof loginSchema>;
 
-export function LoginForm() {
+export function LoginForm({
+  sessionExpiredMessage,
+}: {
+  sessionExpiredMessage?: string;
+}) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [formError, setFormError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(
+    sessionExpiredMessage ?? null,
+  );
   const {
     register,
     handleSubmit,

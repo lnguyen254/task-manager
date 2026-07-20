@@ -14,3 +14,19 @@ export function extractErrorMessage(data: unknown): string {
   }
   return "Something went wrong. Please try again."
 }
+
+/**
+ * Thrown by lib/tasks.ts and lib/tags.ts fetch calls in place of a plain
+ * Error, so callers (and the global QueryClient error handler in
+ * lib/query-client.ts) can distinguish a 401 "session expired" response
+ * from other failures without re-parsing the message string.
+ */
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message)
+    this.name = "ApiError"
+  }
+}

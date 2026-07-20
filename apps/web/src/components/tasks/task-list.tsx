@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { TaskRow } from "@/components/tasks/task-row";
+import { TaskRowSkeleton } from "@/components/tasks/task-row-skeleton";
 import {
   fetchTasks,
   taskKeys,
@@ -37,7 +38,13 @@ export function TaskList() {
   });
 
   if (isPending) {
-    return <p className="text-sm text-muted-foreground">Loading tasks…</p>;
+    return (
+      <ul className="divide-y divide-border rounded-md border border-border">
+        {Array.from({ length: 5 }, (_, i) => (
+          <TaskRowSkeleton key={i} />
+        ))}
+      </ul>
+    );
   }
 
   if (isError) {

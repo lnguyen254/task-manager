@@ -20,8 +20,8 @@ export default async function DashboardPage() {
 
   return (
     <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="min-w-0 truncate text-2xl font-semibold tracking-tight">
           Welcome, {user.name}
         </h1>
         <CreateTaskDialog />

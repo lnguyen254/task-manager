@@ -6,10 +6,20 @@ export const metadata: Metadata = {
   title: "Log in - Task Manager",
 };
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ sessionExpired?: string }>;
+}) {
+  const { sessionExpired } = await searchParams;
+
   return (
     <div className="flex flex-1 items-center justify-center px-4 py-16">
-      <LoginForm />
+      <LoginForm
+        sessionExpiredMessage={
+          sessionExpired ? "Your session has expired. Please log in again." : undefined
+        }
+      />
     </div>
   );
 }
