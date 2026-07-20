@@ -3,6 +3,7 @@ import {
   BadRequestException,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { AllExceptionsFilter } from './all-exceptions.filter';
@@ -108,6 +109,29 @@ describe('AllExceptionsFilter', () => {
     const body = json.mock.calls[0][0];
     expect(JSON.stringify(body)).not.toContain('leaked db connection string');
     expect(JSON.stringify(body)).not.toContain('.ts:');
+  });
+
+  it('falls back to the reason phrase when an HttpException carries a non-string error (e.g. Terminus health-check failure)', () => {
+    const { host, status, json } = mockHost();
+
+    filter.catch(
+      new ServiceUnavailableException({
+        status: 'error',
+        info: {},
+        error: {
+          database: { status: 'down', message: 'timeout of 1000ms exceeded' },
+        },
+        details: {},
+      }),
+      host,
+    );
+
+    expect(status).toHaveBeenCalledWith(503);
+    expect(json).toHaveBeenCalledWith({
+      statusCode: 503,
+      message: 'Service Unavailable Exception',
+      error: 'Service Unavailable',
+    });
   });
 
   it('maps a thrown non-Error value to the same generic 500 shape', () => {

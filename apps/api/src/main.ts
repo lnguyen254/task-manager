@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
+import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { validateEnv } from './config/env';
@@ -12,7 +13,11 @@ async function bootstrap() {
   // runtime error the first time the bad value is used.
   const env = validateEnv();
 
-  const app = await NestFactory.create(AppModule);
+  // Buffers Nest's own startup logs until the pino logger below is wired
+  // in, so they go through the same structured/redacted pipeline instead
+  // of the default console logger.
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  app.useLogger(app.get(Logger));
   app.use(
     helmet({
       // Swagger UI at /api/docs relies on an inline bootstrap script;

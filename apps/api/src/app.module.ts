@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { TerminusModule } from '@nestjs/terminus';
+import { LoggerModule } from 'nestjs-pino';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { HealthController } from './health/health.controller';
@@ -24,6 +26,32 @@ const throttlerGuardProvider = [
 @Module({
   imports: [
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
+    LoggerModule.forRoot({
+      pinoHttp: {
+        // Quiets the request-log spam that would otherwise drown out real
+        // traffic in test output; the e2e suite already builds one app
+        // instance per file and reuses it across many it()s.
+        level: process.env.NODE_ENV === 'test' ? 'silent' : 'info',
+        // The Docker HEALTHCHECK polls this every 10s — logging it would
+        // bury actual request activity in noise.
+        autoLogging: {
+          ignore: (req) => req.url === '/health',
+        },
+        // Tokens/passwords must never reach the logs (see CLAUDE.md's
+        // security checklist): the access token travels as a Bearer header
+        // between the BFF and this API, and the refresh/access tokens are
+        // set as cookies by the BFF, so both header locations are redacted.
+        redact: {
+          paths: [
+            'req.headers.authorization',
+            'req.headers.cookie',
+            'res.headers["set-cookie"]',
+          ],
+          censor: '[Redacted]',
+        },
+      },
+    }),
+    TerminusModule,
     PrismaModule,
     UsersModule,
     AuthModule,

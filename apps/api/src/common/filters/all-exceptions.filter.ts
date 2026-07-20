@@ -61,11 +61,18 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
       if (typeof httpResponse === 'object' && httpResponse !== null) {
         const { message, error } = httpResponse as Record<string, unknown>;
+        // `error` is only usable if it's actually a string — some
+        // HttpException subclasses (e.g. Terminus's health-check failure)
+        // put a per-check details object there instead, which would
+        // otherwise violate this filter's own `{statusCode, message, error}`
+        // string-only contract.
         return {
           statusCode: status,
           message:
-            (message as string | string[] | undefined) ?? exception.message,
-          error: (error as string | undefined) ?? reasonPhrase,
+            typeof message === 'string' || Array.isArray(message)
+              ? (message as string | string[])
+              : exception.message,
+          error: typeof error === 'string' ? error : reasonPhrase,
         };
       }
 
